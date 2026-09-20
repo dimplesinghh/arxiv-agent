@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+evals/cache/
+evals/results/*.local.json
+.DS_Store
+.ruff_cache/
+
+development-notes.md
+
