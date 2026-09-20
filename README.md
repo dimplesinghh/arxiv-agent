@@ -44,6 +44,4 @@ cp .env.example .env
 # edit .env: set GROQ_API_KEY and QDRANT_COLLECTION
 ```
 
-Running the agent, running the evals, and interpreting results — added in Weekends 2 and 3.
-
 ## Repo tour
