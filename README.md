@@ -12,13 +12,13 @@ Companion to [`dimplesinghh/arxiv-rag`](https://github.com/dimplesinghh/arxiv-ra
 - **Explicit state machine** (`PLAN → ACT → OBSERVE → REFLECT → ANSWER`), not free-form ReAct. Each transition is unit-testable.
 - **Errors are values, not exceptions.** Every tool returns `ToolResult(ok, data, error)`; nothing raises into the loop.
 - **LLM: Groq-hosted `openai/gpt-oss-120b`.** Chosen deliberately for an open-weights model with a rate-limited free tier: the eval harness exercises real 429s, real backoff, real degradation. Frontier models would hide these failure modes. Full rationale in `docs/decisions.md`.
-- A running Qdrant instance with the `arxiv_chunks` collection from [`dimplesinghh/arxiv-rag`](https://github.com/dimplesinghh/arxiv-rag). This repo intentionally does not spin up its own Qdrant — it reuses Project 1's index rather than duplicating 300 papers of embeddings. Before working here, run `docker compose up -d` from your local `arxiv-rag/` checkout.
+- **Qdrant index reused from `arxiv-rag`, not duplicated.** This repo reads the `arxiv_chunks` collection from Project 1's instance rather than re-embedding 300 papers. Tradeoff: `arxiv-rag`'s Qdrant must be running before this repo is useful. Rationale: the index is expensive to rebuild and both repos are portfolio pieces — reuse > duplication.
 
 ## Prerequisites
 
 - Python 3.12
 - A [Groq API key](https://console.groq.com/keys) (free tier is sufficient — see rate limits below)
-- A running Qdrant instance with the `arxiv-rag` index available at `QDRANT_URL`. See [`dimplesinghh/arxiv-rag`](https://github.com/dimplesinghh/arxiv-rag) for how to build it.
+- A running Qdrant instance with the `arxiv_chunks` collection from [`dimplesinghh/arxiv-rag`](https://github.com/dimplesinghh/arxiv-rag). Start it with `docker compose up -d` from your local `arxiv-rag/` checkout before working here.
 
 ### Groq free-tier rate limits (as of Sep 2026)
 
@@ -36,6 +36,10 @@ These limits directly shape the failure taxonomy — the `RATE_LIMITED` handler 
 ## Quickstart
 
 ```bash
+# Bring up the shared Qdrant from Project 1
+cd ~/projects/arxiv-rag && docker compose up -d
+cd -
+# Set up this repo
 git clone git@github.com:dimplesinghh/arxiv-agent.git
 cd arxiv-agent
 python3.12 -m venv .venv && source .venv/bin/activate
@@ -43,5 +47,3 @@ pip install -r requirements.txt
 cp .env.example .env
 # edit .env: set GROQ_API_KEY and QDRANT_COLLECTION
 ```
-
-## Repo tour
