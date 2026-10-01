@@ -55,4 +55,5 @@ src/arxiv_agent/
   tools/
     __init__.py          # tool registry (name → function, schema)
     arxiv_search.py      # search the public arXiv API
+    rag_retrieve.py      # dense retrieval + cross-encoder rerank over Project 1's Qdrant index
 ```
