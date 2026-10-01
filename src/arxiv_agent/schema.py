@@ -22,6 +22,7 @@ class ToolErrorKind(str, Enum):
     TOOL_ERROR_RETRYABLE = "tool_error_retryable"  # network blip, transient service error
     TOOL_ERROR_FATAL = "tool_error_fatal"        # bad input, no retry helps (e.g. arxiv ID doesn't exist)
     MALFORMED_TOOL_ARGS = "malformed_tool_args"  # LLM emitted invalid JSON or wrong param names
+    TRUNCATED = "truncated" 
     EMPTY_RESULT = "empty_result"                # tool ran fine but found nothing relevant
 
 
@@ -106,6 +107,7 @@ class FailureCounters(BaseModel):
     repairs_attempted: int = 0
     retries_attempted: int = 0
     budget_exhausted: bool = False
+    truncated: int = 0
 
     def bump(self, kind: ToolErrorKind) -> None:
         setattr(self, kind.value, getattr(self, kind.value) + 1)
