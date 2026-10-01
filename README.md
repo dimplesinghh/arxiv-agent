@@ -47,3 +47,12 @@ pip install -r requirements.txt
 cp .env.example .env
 # edit .env: set GROQ_API_KEY and QDRANT_COLLECTION
 ```
+## Repo Tour 
+```
+src/arxiv_agent/
+  schema.py              # pydantic models: ToolResult, ToolError, StepRecord, AgentState
+  llm.py                 # Groq client wrapper, tool-use parsing
+  tools/
+    __init__.py          # tool registry (name → function, schema)
+    arxiv_search.py      # search the public arXiv API
+```
