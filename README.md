@@ -52,8 +52,11 @@ cp .env.example .env
 src/arxiv_agent/
   schema.py              # pydantic models: ToolResult, ToolError, StepRecord, AgentState
   llm.py                 # Groq client wrapper, tool-use parsing
-  tools/
+  t  tools/
     __init__.py          # tool registry (name → function, schema)
     arxiv_search.py      # search the public arXiv API
     rag_retrieve.py      # dense retrieval + cross-encoder rerank over Project 1's Qdrant index
+    fetch_paper.py       # download and parse a full arXiv paper by ID (cached)
+    summarize.py         # focused LLM summarization with input-size cap and partial-output flag
+    
 ```
