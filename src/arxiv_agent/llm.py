@@ -119,6 +119,7 @@ def call_llm(
     temperature: float = 0.0,
     max_tokens: int = 1024,
     include_raw: bool = False,
+    allow_truncation: bool = False,
 ) -> LLMResponse:
     """Call the LLM. See module docstring for scope.
 
@@ -155,7 +156,7 @@ def call_llm(
     # Truncation check must come BEFORE parsing tool_calls — truncated JSON
     # would otherwise masquerade as a malformed-args error, sending the
     # repair handler into a loop it can't win against the same max_tokens.
-    if finish_reason == "length":
+    if finish_reason == "length" and not allow_truncation:
         raise TruncatedResponseError(
             prompt_tokens=(resp.usage.prompt_tokens if resp.usage else 0),
             max_tokens=max_tokens,

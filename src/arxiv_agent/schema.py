@@ -131,3 +131,13 @@ class AgentState(BaseModel):
 
     def budget_exhausted(self) -> bool:
         return self.step_n >= self.step_budget
+
+# ~4 chars/token is the standard rough estimate for English prose. Close enough
+# for budget enforcement; we don't need tokenizer-exact counts here.
+CHARS_PER_TOKEN_ESTIMATE = 4
+
+def approx_token_count(text: str) -> int:
+    """Rough token estimate from character count. Within ~15% for English prose.
+    Use for budget guardrails, not for anything that requires exact counts.
+    """
+    return len(text) // CHARS_PER_TOKEN_ESTIMATE
