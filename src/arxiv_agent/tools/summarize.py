@@ -16,11 +16,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from arxiv_agent.llm import (
-    MalformedToolArgsError,
-    TruncatedResponseError,
-    call_llm,
-)
+from arxiv_agent.failures import call_llm_with_retry
+from arxiv_agent.llm import MalformedToolArgsError
 from arxiv_agent.schema import (
     ToolError,
     ToolErrorKind,
@@ -126,7 +123,7 @@ def summarize(text: str, focus: str) -> ToolResult:
     ]
 
     try:
-        resp = call_llm(
+        resp = call_llm_with_retry(
             messages=messages,
             temperature=0.0,
             max_tokens=_MAX_OUTPUT_TOKENS,

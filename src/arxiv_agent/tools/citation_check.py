@@ -22,7 +22,8 @@ import json
 import time
 from typing import Any
 
-from arxiv_agent.llm import MalformedToolArgsError, call_llm
+from arxiv_agent.failures import call_llm_with_retry
+from arxiv_agent.llm import MalformedToolArgsError
 from arxiv_agent.schema import ToolError, ToolErrorKind, ToolResult
 
 
@@ -60,8 +61,10 @@ SCHEMA: dict[str, Any] = {
                         "type": "object",
                         "properties": {
                             "text": {"type": "string"},
-                            "arxiv_id": {"type": "string"},
-                            "chunk_idx": {"type": "integer"},
+                            # null allowed: fetch_paper sections have no chunk_idx,
+                            # and Groq rejects the whole call on a type mismatch.
+                            "arxiv_id": {"type": ["string", "null"]},
+                            "chunk_idx": {"type": ["integer", "null"]},
                         },
                         "required": ["text"],
                     },
@@ -163,7 +166,7 @@ def citation_check(claim: str, sources: list[dict[str, Any]]) -> ToolResult:
     ]
 
     try:
-        resp = call_llm(
+        resp = call_llm_with_retry(
             messages=messages,
             temperature=0.0,
             max_tokens=_MAX_OUTPUT_TOKENS,

@@ -42,7 +42,8 @@ SCHEMA: dict[str, Any] = {
         "name": "rag_retrieve",
         "description": (
             "Retrieve relevant chunks from the local arXiv paper index "
-            "(cs.LG and cs.AI papers, ~300 papers, ~2500 chunks). "
+            "(50 cs.LG and cs.AI papers submitted in July 2026, 2,356 chunks). "
+            "Older or well-known papers are not in this index. "
             "Returns chunks with their source arxiv_id and the chunk text. "
             "Use for questions about the content of papers already in the index. "
             "Does NOT search the live arXiv API — use arxiv_search for that."

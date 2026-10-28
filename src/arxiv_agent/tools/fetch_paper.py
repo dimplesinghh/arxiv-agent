@@ -33,6 +33,11 @@ from arxiv_agent.schema import ToolError, ToolErrorKind, ToolResult
 _CACHE_DIR = Path("evals/cache/pdfs")
 _TIMEOUT_SECONDS = 60   # downloads can be slow; arxiv PDFs 1-10 MB
 
+# A whole paper is ~70K chars, far over the 8K tokens/minute budget. The tool
+# returns an outline first; the agent then asks for one section at a time.
+_MAX_SECTION_CHARS = 4000
+_MAX_OPENING_CHARS = 1500
+
 # Arxiv IDs come in two forms:
 #   old: cs.LG/0601001           (pre-2007)
 #   new: 2401.12345v1 or 2401.12345
@@ -47,9 +52,11 @@ SCHEMA: dict[str, Any] = {
         "description": (
             "Download and parse the full text of an arXiv paper by its ID "
             "(e.g. '2401.12345v1' or '2401.12345'). Returns sections with "
-            "headings and body text. Cached — repeat calls for the same ID "
-            "are free. Use when retrieved chunks aren't enough context and "
-            "you need surrounding sections. Slow on first call (5-30s)."
+            "headings and body text. Without 'section', returns the list of "
+            "section headings and the paper's opening text (title, abstract). "
+            "Call again with 'section' set to one heading from that list to "
+            "read that section. Cached — repeat calls for the same ID are free. "
+            "Slow on first call (5-30s)."
         ),
         "parameters": {
             "type": "object",
@@ -57,6 +64,10 @@ SCHEMA: dict[str, Any] = {
                 "arxiv_id": {
                     "type": "string",
                     "description": "arXiv paper ID, e.g. '2401.12345v1'. Version suffix optional.",
+                },
+                "section": {
+                    "type": "string",
+                    "description": "Optional. A heading from the section list of a previous call, e.g. 'Methods'. Omit to get the section list.",
                 },
             },
             "required": ["arxiv_id"],
@@ -172,7 +183,30 @@ def _do_fetch(arxiv_id: str) -> dict[str, Any]:
     }
 
 
-def fetch_paper(arxiv_id: str) -> ToolResult:
+def _find_section(sections: list[dict[str, str]], wanted: str) -> dict[str, str] | None:
+    """Exact heading match first (case-insensitive), then substring."""
+    w = wanted.strip().lower()
+    for sec in sections:
+        if sec["heading"].strip().lower() == w:
+            return sec
+    for sec in sections:
+        if w and w in sec["heading"].lower():
+            return sec
+    return None
+
+
+def _opening_text(sections: list[dict[str, str]]) -> str:
+    """Text before the Introduction: title, authors, abstract."""
+    parts = []
+    for sec in sections:
+        if "introduction" in sec["heading"].lower():
+            break
+        parts.append(sec["text"])
+    text = " ".join(parts) if parts else sections[0]["text"]
+    return text[:_MAX_OPENING_CHARS]
+
+
+def fetch_paper(arxiv_id: str, section: str | None = None) -> ToolResult:
     """Pure function. Returns ToolResult. Never raises into the loop."""
     t0 = time.perf_counter()
 
@@ -238,4 +272,43 @@ def fetch_paper(arxiv_id: str) -> ToolResult:
             latency_ms=latency_ms,
         )
 
-    return ToolResult(ok=True, data=data, latency_ms=latency_ms)
+    sections = data["sections"]
+    if section:
+        sec = _find_section(sections, section)
+        if sec is None:
+            return ToolResult(
+                ok=False,
+                error=ToolError(
+                    kind=ToolErrorKind.EMPTY_RESULT,
+                    message=(
+                        f"no section matching {section!r} in {arxiv_id}; "
+                        f"available: {[s['heading'] for s in sections]}"
+                    ),
+                    retryable=False,
+                ),
+                latency_ms=latency_ms,
+            )
+        return ToolResult(
+            ok=True,
+            data={
+                "arxiv_id": arxiv_id,
+                "heading": sec["heading"],
+                "text": sec["text"][:_MAX_SECTION_CHARS],
+                "text_truncated": len(sec["text"]) > _MAX_SECTION_CHARS,
+                "section_chars": len(sec["text"]),
+                "cache_hit": data["cache_hit"],
+            },
+            latency_ms=latency_ms,
+        )
+
+    return ToolResult(
+        ok=True,
+        data={
+            "arxiv_id": arxiv_id,
+            "opening_text": _opening_text(sections),
+            "sections": [{"heading": s["heading"], "chars": len(s["text"])} for s in sections],
+            "num_sections": len(sections),
+            "cache_hit": data["cache_hit"],
+        },
+        latency_ms=latency_ms,
+    )
