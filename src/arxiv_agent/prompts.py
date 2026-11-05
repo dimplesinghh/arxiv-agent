@@ -59,3 +59,14 @@ Query: {original_query}
 The index or API did not find anything matching. Produce ONE reformulated query that targets the same information using different terms — different keywords, different phrasing, or a broader/narrower scope. Do NOT just restate the original with synonyms; genuinely shift the angle.
 
 Return ONLY the new query string. No explanation, no quotes, no prefix."""
+
+
+BUDGET_EXHAUSTED_ANSWER_PROMPT = """Your step budget has been exhausted. Based on the evidence gathered in the trace so far, produce an honest partial answer.
+
+Rules:
+- START with one line that names what you could NOT verify or get to. Prefix with 'UNCERTAIN:'.
+- Then answer what you CAN support, only with claims the retrieved sources back.
+- Cite inline with [arxiv_id] after each claim. Do not invent citations.
+- If a question has multiple parts, answer the parts you can and name the parts you couldn't.
+- Do not pretend you had more time. The point is honesty, not completeness.
+- Target length: 100-400 words."""

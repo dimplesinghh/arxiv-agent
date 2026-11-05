@@ -21,7 +21,13 @@ from typing import Any
 import groq
 
 from arxiv_agent.failures import RetryCallback, call_llm_with_retry
-from arxiv_agent.prompts import ACT_SYSTEM_PROMPT, ANSWER_PROMPT, PLANNER_PROMPT, REFORMULATE_QUERY_PROMPT
+from arxiv_agent.prompts import (
+    ACT_SYSTEM_PROMPT,
+    ANSWER_PROMPT,
+    BUDGET_EXHAUSTED_ANSWER_PROMPT,
+    PLANNER_PROMPT,
+    REFORMULATE_QUERY_PROMPT,
+)
 from arxiv_agent.schema import (
     AgentState,
     AgentStateStatus,
@@ -89,12 +95,16 @@ def run_agent(question: str, step_budget: int = 10) -> AgentState:
     while state.status == AgentStateStatus.RUNNING:
         if state.budget_exhausted() or state.step_n >= _HARD_STEP_CEILING:
             state.counters.budget_exhausted = True
-            state.status = AgentStateStatus.FAILED
             state.history.append(StepRecord(
                 step_n=state.step_n,
                 state=LoopState.DONE,
                 notes=f"step budget exhausted at step_n={state.step_n}",
             ))
+            # If we have any evidence at all, emit an honest partial answer
+            # with explicit uncertainty instead of silently failing.
+            _emit_partial_answer_on_budget_exhaustion(state)
+            if state.status == AgentStateStatus.RUNNING:
+                state.status = AgentStateStatus.FAILED
             break
 
         _step(state)
@@ -618,4 +628,71 @@ def _maybe_reformulate(
         notes=" | ".join(note_parts),
     ))
     return True
+
+
+def _has_successful_tool_evidence(state: AgentState) -> bool:
+    """True if the trace contains at least one OBSERVE step whose tool returned ok."""
+    for step in state.history:
+        if step.state == LoopState.OBSERVE and step.result is not None and step.result.ok:
+            return True
+    return False
+
+
+def _emit_partial_answer_on_budget_exhaustion(state: AgentState) -> None:
+    """Called when the step budget is exhausted.
+
+    If the trace contains at least one successful tool result, do one final
+    LLM call to produce an honest partial answer flagged with uncertainty,
+    and set status to INSUFFICIENT. Otherwise leave status RUNNING — the
+    run_agent caller will convert it to FAILED (nothing to summarize honestly).
+
+    Interview answer: a FAILED status with no final_answer is interchangeable
+    in metrics with a fundamentally-wrong answer. INSUFFICIENT with a partial
+    answer flagged by an UNCERTAIN prefix lets the eval judge tell "ran out of
+    budget with some evidence" apart from "could not understand the question."
+    Different failure mode, different handling downstream.
+    """
+    if not _has_successful_tool_evidence(state):
+        # No evidence to summarize honestly. Stay RUNNING; caller sets FAILED.
+        return
+
+    messages = _build_act_messages(state) + [
+        {"role": "system", "content": BUDGET_EXHAUSTED_ANSWER_PROMPT},
+    ]
+    try:
+        resp = call_llm_with_retry(
+            on_retry=_record_retry(state, LoopState.ANSWER),
+            messages=messages,
+            temperature=0.0,
+            max_tokens=1024,
+            allow_truncation=True,  # a truncated honest answer still beats no answer
+        )
+    except Exception as e:
+        state.history.append(StepRecord(
+            step_n=state.step_n,
+            state=LoopState.ANSWER,
+            notes=f"budget-exhausted answer llm failed: {type(e).__name__}",
+        ))
+        return
+
+    final = (resp.content or "").strip()
+    if not final:
+        state.history.append(StepRecord(
+            step_n=state.step_n,
+            state=LoopState.ANSWER,
+            notes="budget-exhausted answer was empty",
+        ))
+        return
+
+    state.final_answer = final
+    state.citations = _extract_citations(final, state.history)
+    state.status = AgentStateStatus.INSUFFICIENT
+    state.history.append(StepRecord(
+        step_n=state.step_n,
+        state=LoopState.ANSWER,
+        latency_ms=resp.latency_ms,
+        prompt_tokens=resp.prompt_tokens,
+        completion_tokens=resp.completion_tokens,
+        notes="partial answer on budget exhaustion",
+    ))
 

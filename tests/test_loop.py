@@ -223,3 +223,98 @@ def test_reformulated_empty_result_is_recorded(monkeypatch):
     last = state.history[-1]
     assert "reformulated" in last.notes
     assert "empty_result" in last.notes
+
+
+# ===========================================================================
+# Budget-exhausted partial answer
+# ===========================================================================
+
+
+def _observed_step(tool_name: str, arxiv_id: str) -> "object":
+    """Build a StepRecord that looks like an OBSERVE step with a successful
+    tool result containing an arxiv_id. Used to seed state.history so the
+    partial-answer handler sees prior evidence.
+    """
+    from arxiv_agent.schema import StepRecord, LoopState
+    return StepRecord(
+        step_n=1,
+        state=LoopState.OBSERVE,
+        tool_name=tool_name,
+        tool_args={"query": "q"},
+        result=_ok_result({"results": [{"arxiv_id": arxiv_id, "text": "sample"}]}),
+        latency_ms=1,
+        notes="tool=rag_retrieve",
+    )
+
+
+def test_budget_exhausted_with_evidence_emits_insufficient_answer(monkeypatch):
+    """When budget is up and the trace has at least one successful tool
+    result, the handler produces a partial answer and sets status INSUFFICIENT.
+    """
+    from arxiv_agent.schema import AgentStateStatus
+    state = AgentState(question="q", step_budget=3, step_n=3)
+    state.history.append(_observed_step("rag_retrieve", "2005.11401v4"))
+
+    _patch_llm(
+        monkeypatch,
+        new_query="UNCERTAIN: did not verify the numbers. "
+                  "The paper combines parametric and non-parametric memory [2005.11401v4].",
+    )
+
+    loop._emit_partial_answer_on_budget_exhaustion(state)
+
+    assert state.status == AgentStateStatus.INSUFFICIENT
+    assert state.final_answer is not None
+    assert state.final_answer.startswith("UNCERTAIN:")
+    assert "2005.11401v4" in state.citations
+    last = state.history[-1]
+    assert "partial answer on budget exhaustion" in last.notes
+
+
+def test_budget_exhausted_with_no_evidence_leaves_status_running(monkeypatch):
+    """No successful tool results → nothing honest to summarize → don't call
+    the LLM at all. run_agent will then flip status to FAILED.
+    """
+    from arxiv_agent.schema import AgentStateStatus
+    state = AgentState(question="q", step_budget=3, step_n=3)
+    # Only an error-only OBSERVE step — no ok=True result
+    from arxiv_agent.schema import StepRecord, LoopState
+    state.history.append(StepRecord(
+        step_n=1,
+        state=LoopState.OBSERVE,
+        tool_name="rag_retrieve",
+        tool_args={"query": "q"},
+        result=_empty_result(),
+        latency_ms=1,
+        notes="tool=rag_retrieve | error_kind=empty_result",
+    ))
+
+    # If the LLM is accidentally called, this would blow up.
+    def fail_if_called(**kwargs):
+        raise AssertionError("LLM must not be called when there is no evidence")
+    monkeypatch.setattr(loop, "call_llm_with_retry", fail_if_called)
+
+    loop._emit_partial_answer_on_budget_exhaustion(state)
+
+    assert state.status == AgentStateStatus.RUNNING
+    assert state.final_answer is None
+
+
+def test_budget_exhausted_llm_failure_does_not_crash(monkeypatch):
+    """If the final partial-answer LLM call itself fails (persistent 429, auth,
+    etc.), the handler must not raise into run_agent — it records a note and
+    leaves status RUNNING so the caller can flip to FAILED cleanly.
+    """
+    from arxiv_agent.schema import AgentStateStatus
+    state = AgentState(question="q", step_budget=3, step_n=3)
+    state.history.append(_observed_step("rag_retrieve", "2005.11401v4"))
+
+    def boom(**kwargs):
+        raise RuntimeError("persistent llm failure")
+    monkeypatch.setattr(loop, "call_llm_with_retry", boom)
+
+    loop._emit_partial_answer_on_budget_exhaustion(state)
+
+    assert state.status == AgentStateStatus.RUNNING
+    assert state.final_answer is None
+    assert any("budget-exhausted answer llm failed" in s.notes for s in state.history)
