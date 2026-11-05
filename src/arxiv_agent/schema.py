@@ -108,6 +108,7 @@ class FailureCounters(BaseModel):
     retries_attempted: int = 0
     budget_exhausted: bool = False
     truncated: int = 0
+    reformulations_attempted: int = 0
 
     def bump(self, kind: ToolErrorKind) -> None:
         setattr(self, kind.value, getattr(self, kind.value) + 1)

@@ -49,3 +49,13 @@ Rules:
 - If the evidence is insufficient to answer the question, say so explicitly. State what's missing. Do not pad with tangential content.
 - No preamble. Start with the answer.
 - Target length: 150-500 words unless the question demands otherwise."""
+
+
+REFORMULATE_QUERY_PROMPT = """The following tool call returned no results:
+
+Tool: {tool_name}
+Query: {original_query}
+
+The index or API did not find anything matching. Produce ONE reformulated query that targets the same information using different terms — different keywords, different phrasing, or a broader/narrower scope. Do NOT just restate the original with synonyms; genuinely shift the angle.
+
+Return ONLY the new query string. No explanation, no quotes, no prefix."""

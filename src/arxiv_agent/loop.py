@@ -21,7 +21,7 @@ from typing import Any
 import groq
 
 from arxiv_agent.failures import RetryCallback, call_llm_with_retry
-from arxiv_agent.prompts import ACT_SYSTEM_PROMPT, ANSWER_PROMPT, PLANNER_PROMPT
+from arxiv_agent.prompts import ACT_SYSTEM_PROMPT, ANSWER_PROMPT, PLANNER_PROMPT, REFORMULATE_QUERY_PROMPT
 from arxiv_agent.schema import (
     AgentState,
     AgentStateStatus,
@@ -49,6 +49,10 @@ _MAX_ITEM_TEXT_CHARS = 400
 # one-line note. Without this the ACT prompt grows every step until a single
 # request exceeds the 8K tokens/minute limit (HTTP 413, not retryable).
 _KEEP_FULL_RESULTS = 3
+
+# Retrieval tools whose EMPTY_RESULT triggers a one-shot query reformulation.
+_REFORMULATABLE_TOOLS = frozenset({"rag_retrieve", "arxiv_search"})
+_MAX_REFORMULATIONS_PER_RUN = 1
 
 
 def _record_retry(state: AgentState, loop_state: LoopState) -> RetryCallback:
@@ -249,6 +253,10 @@ def _step(state: AgentState) -> None:
         completion_tokens=resp.completion_tokens,
         notes=" | ".join(note_parts),
     ))
+
+    # One-shot query reformulation on EMPTY_RESULT from a retrieval tool.
+    # Records its own OBSERVE step and consumes one step from the budget.
+    _maybe_reformulate(state, tc.name, tc.args, tool_result)
 
     # Weekend 1 REFLECT is implicit: the next loop iteration will call ACT
     # again with the updated history, which lets the model see the tool result
@@ -519,3 +527,95 @@ def _is_insufficient(answer: str) -> bool:
     )
     lowered = answer.lower()
     return any(n in lowered for n in needles)
+
+
+def _maybe_reformulate(
+    state: AgentState,
+    tool_name: str,
+    tool_args: dict[str, Any] | None,
+    tool_result: ToolResult,
+) -> bool:
+    """If a retrieval tool returned EMPTY_RESULT and we have not yet reformulated
+    this run, ask the LLM for a different query and re-execute the same tool.
+    Records a new OBSERVE step. Returns True if reformulation fired.
+
+    Design (interview-answerable):
+    - Fires at most _MAX_REFORMULATIONS_PER_RUN (currently 1). An agent that
+      cannot answer on its original + one rephrase should fall through to
+      "insufficient evidence" instead of thrashing on query variants.
+    - Only applies to query-driven retrieval tools (rag_retrieve, arxiv_search).
+      Reformulating fetch_paper's arxiv_id is a different failure mode.
+    - Separate recorded step, not silent — the trace shows that reformulation
+      happened, which makes failure handling visible in evals.
+    - Consumes one step from the budget. Honest accounting.
+    """
+    if state.counters.reformulations_attempted >= _MAX_REFORMULATIONS_PER_RUN:
+        return False
+    if tool_name not in _REFORMULATABLE_TOOLS:
+        return False
+    if tool_result.ok:
+        return False
+    if tool_result.error is None or tool_result.error.kind != ToolErrorKind.EMPTY_RESULT:
+        return False
+
+    original_query = (tool_args or {}).get("query", "")
+    if not isinstance(original_query, str) or not original_query.strip():
+        return False
+
+    prompt = REFORMULATE_QUERY_PROMPT.format(
+        tool_name=tool_name,
+        original_query=original_query,
+    )
+    try:
+        resp = call_llm_with_retry(
+            on_retry=_record_retry(state, LoopState.OBSERVE),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=80,
+        )
+    except Exception as e:
+        state.history.append(StepRecord(
+            step_n=state.step_n,
+            state=LoopState.OBSERVE,
+            notes=f"reformulate llm failed: {type(e).__name__}",
+        ))
+        return False
+
+    new_query = (resp.content or "").strip().strip('"').strip("'")
+    if not new_query or new_query.lower() == original_query.lower():
+        state.history.append(StepRecord(
+            step_n=state.step_n,
+            state=LoopState.OBSERVE,
+            notes="reformulate produced empty-or-identical query; skipped",
+        ))
+        return False
+
+    state.counters.reformulations_attempted += 1
+
+    new_args = dict(tool_args or {})
+    new_args["query"] = new_query
+
+    state.step_n += 1
+
+    tool_fn = get_function(tool_name)
+    if tool_fn is None:
+        return False
+    reformulated_result = tool_fn(**new_args)
+
+    note_parts = [f"tool={tool_name}", "reformulated"]
+    if reformulated_result.ok is False and reformulated_result.error is not None:
+        note_parts.append(f"error_kind={reformulated_result.error.kind.value}")
+
+    state.history.append(StepRecord(
+        step_n=state.step_n,
+        state=LoopState.OBSERVE,
+        tool_name=tool_name,
+        tool_args=new_args,
+        result=reformulated_result,
+        latency_ms=resp.latency_ms + reformulated_result.latency_ms,
+        prompt_tokens=resp.prompt_tokens,
+        completion_tokens=resp.completion_tokens,
+        notes=" | ".join(note_parts),
+    ))
+    return True
+
