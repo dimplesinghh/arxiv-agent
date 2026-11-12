@@ -63,7 +63,7 @@ SCHEMA: dict[str, Any] = {
 # Timeout for the whole call. arxiv client's ~3s internal delay means a
 # normal call takes 3-8s; 20s absorbs transient slowness without hanging
 # the agent indefinitely. TOOL_TIMEOUT fires beyond this.
-_TIMEOUT_SECONDS = 20
+_TIMEOUT_SECONDS = 40
 
 
 def _do_search(query: str, max_results: int, sort_by: str) -> list[dict[str, Any]]:

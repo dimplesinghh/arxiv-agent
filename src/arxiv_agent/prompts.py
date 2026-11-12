@@ -38,8 +38,8 @@ Rules:
 - Do not repeat a search that did not find what you need with only small wording changes. Change strategy: search by exact title, or fetch a paper you have identified.
 - Stop as soon as the evidence answers the question; every extra tool call costs budget.
 - Do not invent arxiv_ids. Only cite arxiv_ids that appeared in tool results.
-- Cite sources inline in the final answer using the format [arxiv_id]."""
-
+- Cite sources inline in the final answer using the format [arxiv_id].
+- The local index holds ~50 arXiv papers from July 2026 (cs.LG / cs.AI). For ANY question about the content of a specific paper or topic, try rag_retrieve FIRST. Only fall back to arxiv_search when rag_retrieve returns empty and you have reason to believe the paper exists outside the index."""
 
 ANSWER_PROMPT = """Based on everything gathered so far, produce the final answer to the user's question.
 
