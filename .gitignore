@@ -10,3 +10,5 @@ evals/results/*.local.json
 
 development-notes.md
 
+evals/results/*/q*.json
+evals/results/*.local.json
