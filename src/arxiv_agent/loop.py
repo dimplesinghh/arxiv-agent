@@ -38,7 +38,8 @@ from arxiv_agent.schema import (
     ToolResult,
 )
 from arxiv_agent.tools import TOOLS, get_function, get_schemas
-from arxiv_agent.llm import TruncatedResponseError, MalformedToolArgsError
+from arxiv_agent.llm import TruncatedResponseError, MalformedToolArgsError, call_llm
+from arxiv_agent import config
 
 
 # Hard safety cap on top of AgentState.step_budget. Prevents the loop from
@@ -60,6 +61,20 @@ _KEEP_FULL_RESULTS = 3
 _REFORMULATABLE_TOOLS = frozenset({"rag_retrieve", "arxiv_search"})
 _MAX_REFORMULATIONS_PER_RUN = 1
 
+def _call_llm(messages, on_retry=None, **llm_kwargs):
+    """Call the LLM, respecting the no-failure-handling ablation flag.
+
+    Default (flag off): uses call_llm_with_retry — the project's normal path,
+    with 429 backoff, 5xx exponential retry, and the on_retry callback for
+    counter updates.
+
+    Ablation (flag on): calls llm.call_llm directly. Any transient failure
+    propagates as an exception which the caller's try/except catches and
+    records as a terminating StepRecord. No retries, no handler counters move.
+    """
+    if config.no_failure_handling():
+        return call_llm(messages=messages, **llm_kwargs)
+    return call_llm_with_retry(on_retry=on_retry, messages=messages, **llm_kwargs)
 
 def _record_retry(state: AgentState, loop_state: LoopState) -> RetryCallback:
     """on_retry callback for call_llm_with_retry: counts the retry and leaves
@@ -119,7 +134,7 @@ def run_agent(question: str, step_budget: int = 10) -> AgentState:
 
 def _plan(state: AgentState) -> None:
     try:
-        resp = call_llm_with_retry(
+        resp = _call_llm(
             on_retry=_record_retry(state, LoopState.PLAN),
             messages=[
                 {"role": "system", "content": PLANNER_PROMPT},
@@ -162,7 +177,7 @@ def _step(state: AgentState) -> None:
     messages = _build_act_messages(state)
 
     try:
-        resp = call_llm_with_retry(
+        resp = _call_llm(
             on_retry=_record_retry(state, LoopState.ACT),
             messages=messages,
             tools=get_schemas(),
@@ -452,7 +467,7 @@ def _finalize_answer(
             {"role": "system", "content": ANSWER_PROMPT},
         ]
         try:
-            resp = call_llm_with_retry(
+            resp = _call_llm(
                 on_retry=_record_retry(state, LoopState.ANSWER),
                 messages=messages,
                 temperature=0.0,
@@ -577,7 +592,7 @@ def _maybe_reformulate(
         original_query=original_query,
     )
     try:
-        resp = call_llm_with_retry(
+        resp = _call_llm(
             on_retry=_record_retry(state, LoopState.OBSERVE),
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
@@ -660,7 +675,7 @@ def _emit_partial_answer_on_budget_exhaustion(state: AgentState) -> None:
         {"role": "system", "content": BUDGET_EXHAUSTED_ANSWER_PROMPT},
     ]
     try:
-        resp = call_llm_with_retry(
+        resp = _call_llm(
             on_retry=_record_retry(state, LoopState.ANSWER),
             messages=messages,
             temperature=0.0,

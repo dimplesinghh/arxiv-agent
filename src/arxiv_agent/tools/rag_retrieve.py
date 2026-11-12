@@ -23,6 +23,7 @@ from qdrant_client import QdrantClient
 from sentence_transformers import CrossEncoder, SentenceTransformer
 
 from arxiv_agent.schema import ToolError, ToolErrorKind, ToolResult
+from arxiv_agent import config
 
 
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
@@ -142,6 +143,10 @@ def rag_retrieve(
 ) -> ToolResult:
     """Pure function. Returns ToolResult. Never raises into the loop."""
     t0 = time.perf_counter()
+
+    # Ablation flag: force dense-only retrieval regardless of caller argument.
+    if config.no_rerank():
+        use_rerank = False
 
     top_k = max(1, min(10, top_k))
 

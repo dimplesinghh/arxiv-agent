@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from collections import Counter, defaultdict
@@ -204,6 +205,10 @@ def run_one(q: dict[str, Any], result_path: Path, step_budget: int, force: bool)
     tool_summary = _tool_calls_summary(state.history)
     row = {
         "id": q["id"],
+        "config": {
+            "no_failure_handling": os.environ.get("ARXIV_AGENT_NO_FAILURE_HANDLING", "").lower() in ("1", "true", "yes"),
+            "no_rerank": os.environ.get("ARXIV_AGENT_NO_RERANK", "").lower() in ("1", "true", "yes"),
+        },
         "category": q["category"],
         "question": q["question"],
         "success_criteria": q["success_criteria"],
@@ -343,7 +348,22 @@ def main() -> int:
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--step-budget", type=int, default=10)
     parser.add_argument("--config", type=str, default="baseline")
+    parser.add_argument("--no-failure-handling", action="store_true",
+                        help="Ablation: bypass retry/reformulation/partial-answer handlers")
+    parser.add_argument("--no-rerank", action="store_true",
+                        help="Ablation: force use_rerank=False in rag_retrieve")
     args = parser.parse_args()
+
+    if args.no_failure_handling:
+        os.environ["ARXIV_AGENT_NO_FAILURE_HANDLING"] = "1"
+    if args.no_rerank:
+        os.environ["ARXIV_AGENT_NO_RERANK"] = "1"
+
+    config_suffix = args.config
+    if args.no_failure_handling:
+        config_suffix += "-nofh"
+    if args.no_rerank:
+        config_suffix += "-norerank"
 
     questions = load_questions(args.questions)
     if args.limit:
@@ -351,12 +371,12 @@ def main() -> int:
 
     if args.output_dir is None:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        args.output_dir = DEFAULT_RESULTS_DIR / f"{stamp}-{args.config}"
+        args.output_dir = DEFAULT_RESULTS_DIR / f"{stamp}-{config_suffix}"
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"questions: {len(questions)}")
     print(f"output:    {args.output_dir}")
-    print(f"config:    {args.config}")
+    print(f"config:    {config_suffix}")
     print(f"budget:    {args.step_budget}")
     print()
 

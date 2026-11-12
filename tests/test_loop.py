@@ -318,3 +318,48 @@ def test_budget_exhausted_llm_failure_does_not_crash(monkeypatch):
     assert state.status == AgentStateStatus.RUNNING
     assert state.final_answer is None
     assert any("budget-exhausted answer llm failed" in s.notes for s in state.history)
+
+
+# ===========================================================================
+# Ablation: no-failure-handling flag
+# ===========================================================================
+
+
+def test_reformulate_disabled_when_no_failure_handling(monkeypatch):
+    """Ablation flag ARXIV_AGENT_NO_FAILURE_HANDLING=1 must suppress
+    reformulation entirely, even on EMPTY_RESULT from a retrieval tool.
+    """
+    monkeypatch.setenv("ARXIV_AGENT_NO_FAILURE_HANDLING", "1")
+    state = AgentState(question="q", step_budget=10, step_n=1)
+    _patch_llm(monkeypatch, new_query="won't be used")
+
+    fired = loop._maybe_reformulate(
+        state,
+        tool_name="rag_retrieve",
+        tool_args={"query": "original"},
+        tool_result=_empty_result(),
+    )
+
+    assert fired is False
+    assert state.counters.reformulations_attempted == 0
+
+
+def test_partial_answer_disabled_when_no_failure_handling(monkeypatch):
+    """Ablation flag suppresses the budget-exhausted partial-answer handler
+    even when evidence exists.
+    """
+    from arxiv_agent.schema import AgentStateStatus
+    monkeypatch.setenv("ARXIV_AGENT_NO_FAILURE_HANDLING", "1")
+    state = AgentState(question="q", step_budget=3, step_n=3)
+    state.history.append(_observed_step("rag_retrieve", "2005.11401v4"))
+
+    # If the LLM is called despite the flag, blow up clearly.
+    def fail_if_called(**kwargs):
+        raise AssertionError("LLM must not be called with ablation flag set")
+    monkeypatch.setattr(loop, "call_llm_with_retry", fail_if_called)
+    monkeypatch.setattr(loop, "call_llm", fail_if_called)
+
+    loop._emit_partial_answer_on_budget_exhaustion(state)
+
+    assert state.status == AgentStateStatus.RUNNING
+    assert state.final_answer is None
