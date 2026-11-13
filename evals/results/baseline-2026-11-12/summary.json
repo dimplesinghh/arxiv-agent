@@ -1,0 +1,58 @@
+{
+  "n_questions": 10,
+  "overall_pass_rate": 0.7,
+  "by_category": {
+    "single": {
+      "n": 10,
+      "pass": 7,
+      "pass_rate": 0.7
+    }
+  },
+  "tool_calls": {
+    "total": 49,
+    "ok": 45,
+    "ok_rate": 0.918,
+    "per_tool": {
+      "rag_retrieve": {
+        "calls": 6,
+        "ok": 5,
+        "ok_rate": 0.833
+      },
+      "arxiv_search": {
+        "calls": 14,
+        "ok": 12,
+        "ok_rate": 0.857
+      },
+      "fetch_paper": {
+        "calls": 19,
+        "ok": 18,
+        "ok_rate": 0.947
+      },
+      "citation_check": {
+        "calls": 10,
+        "ok": 10,
+        "ok_rate": 1.0
+      }
+    }
+  },
+  "avg_steps_per_question": 5.9,
+  "token_totals": {
+    "agent_prompt": 165638,
+    "agent_completion": 14022,
+    "judge": 5529,
+    "total": 185189
+  },
+  "failure_counters_total": {
+    "tool_timeout": 0,
+    "rate_limited": 74,
+    "tool_error_retryable": 0,
+    "tool_error_fatal": 0,
+    "malformed_tool_args": 0,
+    "empty_result": 0,
+    "repairs_attempted": 0,
+    "retries_attempted": 74,
+    "budget_exhausted": 0,
+    "truncated": 0,
+    "reformulations_attempted": 1
+  }
+}
