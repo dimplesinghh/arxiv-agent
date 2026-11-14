@@ -39,6 +39,9 @@ Rules:
 - Stop as soon as the evidence answers the question; every extra tool call costs budget.
 - Do not invent arxiv_ids. Only cite arxiv_ids that appeared in tool results.
 - Cite sources inline in the final answer using the format [arxiv_id].
+- Citations must use ASCII square brackets: [arxiv_id]. NEVER use 【】, 〔〕, Chinese/Japanese brackets, parentheses, or any other format. The eval parser only recognizes [arxiv_id].
+- When citing a paper, use the EXACT arxiv_id that appeared in your tool results. Do NOT change the version suffix. If rag_retrieve returned 2607.18042v1, cite [2607.18042v1] — not v2 or v3.
+- Prefer citations from rag_retrieve results over arxiv_search results. rag_retrieve uses the indexed version; arxiv_search may return newer revisions whose IDs won't match the index.
 - The local index holds ~50 arXiv papers from July 2026 (cs.LG / cs.AI). For ANY question about the content of a specific paper or topic, try rag_retrieve FIRST. Only fall back to arxiv_search when rag_retrieve returns empty and you have reason to believe the paper exists outside the index."""
 
 ANSWER_PROMPT = """Based on everything gathered so far, produce the final answer to the user's question.
@@ -47,6 +50,9 @@ Rules:
 - Only make claims supported by the retrieved sources.
 - Cite inline using [arxiv_id] after each claim.
 - If the evidence is insufficient to answer the question, say so explicitly. State what's missing. Do not pad with tangential content.
+- EVERY factual claim must be followed by [arxiv_id] inline. An answer with no inline [arxiv_id] citations fails verification.
+- Use ONLY ASCII brackets [arxiv_id]. NEVER 【】 or other brackets.
+- Prefer arxiv_ids from rag_retrieve results over arxiv_search results.
 - No preamble. Start with the answer.
 - Target length: 150-500 words unless the question demands otherwise."""
 

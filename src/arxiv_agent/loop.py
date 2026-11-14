@@ -527,14 +527,28 @@ def _extract_citations(answer: str, history: list[StepRecord]) -> list[str]:
                 if aid:
                     seen_in_history.add(aid)
 
+    # Build a base-ID → canonical-history-ID map so citations with different
+    # version suffixes still match (e.g. agent cites 2607.18042v2 when
+    # history has 2607.18042v1 — same paper, drift only in revision). The
+    # canonical ID from history is what lands in state.citations so downstream
+    # eval metrics stay honest about which paper was actually indexed.
+    import re as _re
+    _strip_version = _re.compile(r"v\d+$")
+    base_to_history: dict[str, str] = {}
+    for h_aid in seen_in_history:
+        base = _strip_version.sub("", h_aid)
+        base_to_history[base] = h_aid
+
     cited = []
     seen = set()
     for m in _ARXIV_ID_IN_TEXT.finditer(answer):
         aid = m.group(1)
-        if aid in seen or aid not in seen_in_history:
+        base = _strip_version.sub("", aid)
+        canonical = base_to_history.get(base)
+        if canonical is None or canonical in seen:
             continue
-        cited.append(aid)
-        seen.add(aid)
+        cited.append(canonical)
+        seen.add(canonical)
     return cited
 
 
