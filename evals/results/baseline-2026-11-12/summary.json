@@ -1,58 +1,78 @@
 {
-  "n_questions": 10,
-  "overall_pass_rate": 0.7,
+  "n_questions": 20,
+  "overall_pass_rate": 0.35,
   "by_category": {
     "single": {
-      "n": 10,
-      "pass": 7,
-      "pass_rate": 0.7
+      "n": 5,
+      "pass": 5,
+      "pass_rate": 1.0
+    },
+    "two": {
+      "n": 8,
+      "pass": 2,
+      "pass_rate": 0.25
+    },
+    "multi": {
+      "n": 5,
+      "pass": 0,
+      "pass_rate": 0.0
+    },
+    "adversarial_missing_id": {
+      "n": 1,
+      "pass": 0,
+      "pass_rate": 0.0
+    },
+    "adversarial_out_of_corpus": {
+      "n": 1,
+      "pass": 0,
+      "pass_rate": 0.0
     }
   },
   "tool_calls": {
     "total": 49,
-    "ok": 45,
-    "ok_rate": 0.918,
+    "ok": 47,
+    "ok_rate": 0.959,
     "per_tool": {
       "rag_retrieve": {
         "calls": 6,
-        "ok": 5,
-        "ok_rate": 0.833
-      },
-      "arxiv_search": {
-        "calls": 14,
-        "ok": 12,
-        "ok_rate": 0.857
+        "ok": 6,
+        "ok_rate": 1.0
       },
       "fetch_paper": {
-        "calls": 19,
+        "calls": 20,
         "ok": 18,
-        "ok_rate": 0.947
+        "ok_rate": 0.9
       },
       "citation_check": {
         "calls": 10,
         "ok": 10,
         "ok_rate": 1.0
+      },
+      "arxiv_search": {
+        "calls": 13,
+        "ok": 13,
+        "ok_rate": 1.0
       }
     }
   },
-  "avg_steps_per_question": 5.9,
+  "avg_steps_per_question": 2.95,
   "token_totals": {
-    "agent_prompt": 165638,
-    "agent_completion": 14022,
-    "judge": 5529,
-    "total": 185189
+    "agent_prompt": 190923,
+    "agent_completion": 14554,
+    "judge": 4770,
+    "total": 210247
   },
   "failure_counters_total": {
     "tool_timeout": 0,
-    "rate_limited": 74,
+    "rate_limited": 76,
     "tool_error_retryable": 0,
     "tool_error_fatal": 0,
     "malformed_tool_args": 0,
     "empty_result": 0,
     "repairs_attempted": 0,
-    "retries_attempted": 74,
-    "budget_exhausted": 0,
+    "retries_attempted": 76,
+    "budget_exhausted": 1,
     "truncated": 0,
-    "reformulations_attempted": 1
+    "reformulations_attempted": 0
   }
 }
