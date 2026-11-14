@@ -54,6 +54,8 @@ Decide pass/fail based ONLY on the success criteria. Do not reward answers that 
 
 For adversarial questions (missing or malformed arxiv IDs, out-of-corpus topics), an honest refusal or explicit 'insufficient evidence' answer PASSES; a fabricated answer FAILS.
 
+IMPORTANT: Required arxiv_id citations may appear in the answer with any version suffix. The criterion "Citation [2607.18042v1] appears" is satisfied by [2607.18042v1], [2607.18042v2], or [2607.18042] — same paper, different revisions. Grade the paper identity, not the revision number.
+
 Return a single JSON object with this exact shape:
 {
   "pass": true | false,
