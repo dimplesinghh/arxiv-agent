@@ -1,6 +1,6 @@
 {
   "n_questions": 20,
-  "overall_pass_rate": 0.35,
+  "overall_pass_rate": 0.55,
   "by_category": {
     "single": {
       "n": 5,
@@ -9,18 +9,18 @@
     },
     "two": {
       "n": 8,
-      "pass": 2,
-      "pass_rate": 0.25
+      "pass": 4,
+      "pass_rate": 0.5
     },
     "multi": {
       "n": 5,
-      "pass": 0,
-      "pass_rate": 0.0
+      "pass": 1,
+      "pass_rate": 0.2
     },
     "adversarial_missing_id": {
       "n": 1,
-      "pass": 0,
-      "pass_rate": 0.0
+      "pass": 1,
+      "pass_rate": 1.0
     },
     "adversarial_out_of_corpus": {
       "n": 1,
@@ -29,49 +29,49 @@
     }
   },
   "tool_calls": {
-    "total": 49,
-    "ok": 47,
-    "ok_rate": 0.959,
+    "total": 129,
+    "ok": 111,
+    "ok_rate": 0.86,
     "per_tool": {
       "rag_retrieve": {
-        "calls": 6,
-        "ok": 6,
-        "ok_rate": 1.0
+        "calls": 26,
+        "ok": 25,
+        "ok_rate": 0.962
       },
       "fetch_paper": {
-        "calls": 20,
-        "ok": 18,
-        "ok_rate": 0.9
+        "calls": 45,
+        "ok": 41,
+        "ok_rate": 0.911
       },
       "citation_check": {
-        "calls": 10,
-        "ok": 10,
+        "calls": 20,
+        "ok": 20,
         "ok_rate": 1.0
       },
       "arxiv_search": {
-        "calls": 13,
-        "ok": 13,
-        "ok_rate": 1.0
+        "calls": 38,
+        "ok": 25,
+        "ok_rate": 0.658
       }
     }
   },
-  "avg_steps_per_question": 2.95,
+  "avg_steps_per_question": 7.15,
   "token_totals": {
-    "agent_prompt": 190923,
-    "agent_completion": 14554,
-    "judge": 4770,
-    "total": 210247
+    "agent_prompt": 505410,
+    "agent_completion": 34701,
+    "judge": 10610,
+    "total": 550721
   },
   "failure_counters_total": {
     "tool_timeout": 0,
-    "rate_limited": 76,
+    "rate_limited": 175,
     "tool_error_retryable": 0,
     "tool_error_fatal": 0,
     "malformed_tool_args": 0,
     "empty_result": 0,
     "repairs_attempted": 0,
-    "retries_attempted": 76,
-    "budget_exhausted": 1,
+    "retries_attempted": 175,
+    "budget_exhausted": 6,
     "truncated": 0,
     "reformulations_attempted": 0
   }
