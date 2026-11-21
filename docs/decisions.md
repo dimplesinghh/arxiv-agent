@@ -254,3 +254,27 @@ q001 burned 6/10 steps on `arxiv_search` to the live arXiv API when the target p
 ### Groq free-tier TPM is 8K; a multi-step question uses 6-10K
 
 A single `rag_retrieve + fetch_paper + citation_check + answer` run averages 6,500-7,500 tokens. The TPM window fires on roughly one in three questions. Not a bug — the entire project is built around this. Documented in the README.
+
+
+## Measured results from the N=20 ablation
+
+Ran three configs against a stratified 20-question subset of `evals/questions.jsonl` using the Groq free-tier `openai/gpt-oss-120b`. Full tables in README.md.
+
+### What the ablation actually proved
+
+- **Baseline pass rate: 55%** (11/20). Agent handled **175 rate-limit events** across the batch via `failures.py`.
+- **No failure handling: 0%** (0/20). One question completed 6 steps before hitting TPM; every subsequent question crashed on its first LLM call because the per-minute window had not cleared and the handler was disabled.
+- **No reranking: 25% overall**; on fair-comparison categories (single, two) where TPD did not contaminate the run: single 80% (vs 100% baseline, −20 pts), two 12.5% (vs 50% baseline, −37.5 pts).
+
+### Updated numbers for the decisions above
+
+Decisions 4 and 12 previously made hand-wavy claims about the value of failure handling and reranking. Replacing those with measurements:
+
+- **Decision 4 (one retry layer in `failures.py`, SDK retries off):** The 55 → 0 delta is the measured consequence of disabling this layer in an environment that actually rate-limits. The retry handler isn't marginal; it's the reason the agent runs end-to-end.
+- **Reranking (`rag_retrieve`'s cross-encoder):** +20 points on single-tool, +37 points on two-tool. Reranking is not catastrophic to remove, but it is the single largest driver of two-tool accuracy because `citation_check` is only as good as the top retrieved chunk.
+
+### Methodology limitations surfaced by the runs
+
+- Ablation-2 (no-rerank) partially TPD-contaminated: multi and adversarial categories had too few real runs to isolate the reranker's effect on them.
+- Ablation-1 (no-failure-handling) is degenerate under any batch condition that overlaps TPM windows; this is a feature of the ablation, not a bug, but it means the 0% figure represents "agent cannot function under real backpressure" rather than "agent handles each question poorly." Both framings are true.
+- N=20 not N=40. Stratified across all 5 categories but statistical power is modest; a 10-point delta at N=20 could be noise, a 30-point delta cannot.

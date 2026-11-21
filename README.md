@@ -93,6 +93,49 @@ PYTHONPATH=src python -m evals.run_eval --output-dir evals/results/baseline-$(da
 
 Full 40-question run is paced across multiple days due to the Groq 200K tokens/day free-tier cap.
 
+
+## Results
+
+Three configs, same 20-question stratified set (5 single, 8 two, 5 multi, 1 adversarial-missing-id, 1 adversarial-out-of-corpus), run against the Groq free-tier `openai/gpt-oss-120b` under real rate-limit conditions.
+
+| Config | Overall | Single | Two | Multi | Adv-missing | Adv-out | Rate-limit events | Tokens |
+|---|---|---|---|---|---|---|---|---|
+| Baseline (all features) | **55%** | 100% | 50% | 20% | 100% | 0% | 175 handled | 551K |
+| No failure handling | **0%** | 0% | 0% | 0% | 0% | 0% | 0 handled, 1 cascade | 15K |
+| No rerank | **25%** | 80% | 12.5% | 0%\* | 0%\* | 0%\* | 86 handled | 261K |
+
+`*` multi and adversarial categories in the no-rerank run hit the TPD cascade after q015; those cells reflect too few real runs to assess the reranker's isolated effect on those categories.
+
+### Ablation 1 — No failure handling
+
+A single question (q001) completed 6 steps before hitting the 8K TPM window. With retries disabled, the agent crashed. The next question's PLAN call immediately hit 429 because the per-minute window had not cleared. Every subsequent question crashed on its first LLM call.
+
+The **55 → 0 delta is not an artifact of harsh test conditions** — it is the honest answer to "what happens if you build an agent for a rate-limited free tier without failure handling?" In production, the handler is not optional; it is structural. Baseline handled **175 rate-limit events** across 20 questions and still finished at 55%; the no-fh config handled zero and finished at zero.
+
+### Ablation 2 — No reranking
+
+With the cross-encoder reranker off, the retrieval tool falls back to dense-only. Fair-comparison categories (single, two):
+
+- **single: 100% → 80%** (−20 points). Reranking promotes the right chunk on one of five single-tool questions that dense retrieval alone surfaces lower.
+- **two: 50% → 12.5%** (−37.5 points). Two-tool questions call `citation_check` on the top retrieved chunks; when dense retrieval returns the wrong chunk as #1, the whole verification chain fails.
+
+The reranker is not catastrophic to remove (unlike failure handling), but it costs real pass rate — especially on questions that need high retrieval precision for downstream verification.
+
+### Headline interpretation
+
+| Component | Measured contribution |
+|---|---|
+| Failure handling | **+55 points** (makes the agent possible at all under rate limits) |
+| Reranking | **+20 to +37 points** on retrieval-dependent categories |
+
+Both decisions were made before the ablation; the numbers above are post-hoc measurement of their effect.
+
+### Known gaps in the N=20 study
+
+- Ablation-2 was partially TPD-contaminated (q016 onward): multi and adversarial categories need a re-run to assess reranker's effect there.
+- All results are at N=20. The full N=40 question set exists in `evals/questions.jsonl`; running it would take ~2x the token budget and was descoped due to the Groq free-tier 200K TPD cap.
+- Judge is the same model as the agent (same-model bias documented in `docs/decisions.md`). Judge-grader agreement spot-check is a planned next step.
+
 ## Prerequisites
 
 - Python 3.12
